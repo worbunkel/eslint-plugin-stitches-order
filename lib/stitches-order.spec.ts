@@ -242,5 +242,17 @@ ruleTester.run('stitches-order', rule, {
         gap: '8px',
       });`,
     },
+    {
+      name: 'Should not care about line comment positions (for now, if fixing adjust this to care)',
+      code: `const ButtonElement = styled('button', {
+        gap: '8px', // line comment to stay on first line in object
+        display: 'flex',
+      });`,
+      errors: [{ messageId: 'stitchesOrder' }],
+      output: `const ButtonElement = styled('button', {
+        display: 'flex', // line comment to stay on first line in object
+        gap: '8px',
+      });`,
+    },
   ],
 });
