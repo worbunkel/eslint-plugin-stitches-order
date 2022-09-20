@@ -283,9 +283,11 @@ export default createRule({
         if (hasStyledAncestor) {
           const properties = node.properties;
           const sourceCode = context.getSourceCode();
+          const nodeSource = sourceCode.text.substring(...node.range);
           const propertiesWithSourceCode = properties.map((property, originalIndex) => ({
             ...property,
             originalIndex,
+            rangeInNodeSource: property.range.map(rangeIndex => rangeIndex - node.range[0]),
             sourceCode: sourceCode.text.substring(...property.range),
           }));
           const sortedProperties = _.orderBy(propertiesWithSourceCode, property => {
@@ -306,14 +308,23 @@ export default createRule({
             return propertyOrder.length + 1;
           });
           if (!_.isEqual(propertiesWithSourceCode, sortedProperties)) {
+            const propertiesByOriginalIndex = _.keyBy(sortedProperties, 'originalIndex');
+            const sortedPropertiesWithNewIndex = _.map(sortedProperties, (property, newIndex) => ({
+              ...property,
+              newIndex,
+            }));
+            let fixedCode = nodeSource;
+            _.forEach(_.reverse(sortedPropertiesWithNewIndex), property => {
+              const oldProperty = propertiesByOriginalIndex[property.newIndex];
+              fixedCode =
+                fixedCode.substring(0, oldProperty.rangeInNodeSource[0]) +
+                property.sourceCode +
+                fixedCode.substring(oldProperty.rangeInNodeSource[1]);
+            });
             context.report({
               node: node,
               messageId: 'stitchesOrder',
-              fix: fixer =>
-                fixer.replaceText(
-                  node,
-                  `{ ${_.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`,
-                ),
+              fix: fixer => fixer.replaceText(node, fixedCode),
             });
           }
         }

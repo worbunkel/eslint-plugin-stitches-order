@@ -276,7 +276,8 @@ exports.default = createRule({
                 if (hasStyledAncestor) {
                     const properties = node.properties;
                     const sourceCode = context.getSourceCode();
-                    const propertiesWithSourceCode = properties.map((property, originalIndex) => (Object.assign(Object.assign({}, property), { originalIndex, sourceCode: sourceCode.text.substring(...property.range) })));
+                    const nodeSource = sourceCode.text.substring(...node.range);
+                    const propertiesWithSourceCode = properties.map((property, originalIndex) => (Object.assign(Object.assign({}, property), { originalIndex, rangeInNodeSource: property.range.map(rangeIndex => rangeIndex - node.range[0]), sourceCode: sourceCode.text.substring(...property.range) })));
                     const sortedProperties = lodash_1.default.orderBy(propertiesWithSourceCode, property => {
                         const propertyName = property.type === 'Property' && property.key.type === 'Identifier' ? property.key.name : '';
                         const isSpread = property.type === 'SpreadElement';
@@ -294,10 +295,20 @@ exports.default = createRule({
                         return propertyOrder.length + 1;
                     });
                     if (!lodash_1.default.isEqual(propertiesWithSourceCode, sortedProperties)) {
+                        const propertiesByOriginalIndex = lodash_1.default.keyBy(sortedProperties, 'originalIndex');
+                        const sortedPropertiesWithNewIndex = lodash_1.default.map(sortedProperties, (property, newIndex) => (Object.assign(Object.assign({}, property), { newIndex })));
+                        let fixedCode = nodeSource;
+                        lodash_1.default.forEach(lodash_1.default.reverse(sortedPropertiesWithNewIndex), property => {
+                            const oldProperty = propertiesByOriginalIndex[property.newIndex];
+                            fixedCode =
+                                fixedCode.substring(0, oldProperty.rangeInNodeSource[0]) +
+                                    property.sourceCode +
+                                    fixedCode.substring(oldProperty.rangeInNodeSource[1]);
+                        });
                         context.report({
                             node: node,
                             messageId: 'stitchesOrder',
-                            fix: fixer => fixer.replaceText(node, `{ ${lodash_1.default.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`),
+                            fix: fixer => fixer.replaceText(node, fixedCode),
                         });
                     }
                 }
