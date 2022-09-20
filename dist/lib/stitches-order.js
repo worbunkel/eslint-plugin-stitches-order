@@ -268,36 +268,37 @@ exports.default = createRule({
     defaultOptions: [],
     create: context => {
         return {
-            CallExpression(node) {
-                if (node.callee.type === 'Identifier' && node.callee.name === 'styled') {
-                    const argument2 = node.arguments[1];
-                    if (argument2.type === 'ObjectExpression') {
-                        const properties = argument2.properties;
-                        const sourceCode = context.getSourceCode();
-                        const propertiesWithSourceCode = properties.map((property, originalIndex) => (Object.assign(Object.assign({}, property), { originalIndex, sourceCode: sourceCode.text.substring(...property.range) })));
-                        const sortedProperties = lodash_1.default.orderBy(propertiesWithSourceCode, property => {
-                            const propertyName = property.type === 'Property' && property.key.type === 'Identifier' ? property.key.name : '';
-                            const isSpread = property.type === 'SpreadElement';
-                            const propertyOrderIndex = lodash_1.default.indexOf(propertyOrder, propertyName);
-                            const alwaysEndingPropertyIndex = lodash_1.default.indexOf(alwaysEndingProperties, propertyName);
-                            if (propertyOrderIndex !== -1) {
-                                return propertyOrderIndex;
-                            }
-                            if (alwaysEndingPropertyIndex !== -1) {
-                                return alwaysEndingPropertyIndex + propertyOrder.length + 2;
-                            }
-                            if (isSpread) {
-                                return -1;
-                            }
-                            return propertyOrder.length + 1;
-                        });
-                        if (!lodash_1.default.isEqual(propertiesWithSourceCode, sortedProperties)) {
-                            context.report({
-                                node: argument2,
-                                messageId: 'stitchesOrder',
-                                fix: fixer => fixer.replaceText(argument2, `{ ${lodash_1.default.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`),
-                            });
+            ObjectExpression(node) {
+                const ancestors = context.getAncestors();
+                const hasStyledAncestor = lodash_1.default.some(ancestors, ancestor => ancestor.type === 'CallExpression' &&
+                    ancestor.callee.type === 'Identifier' &&
+                    ancestor.callee.name === 'styled');
+                if (hasStyledAncestor) {
+                    const properties = node.properties;
+                    const sourceCode = context.getSourceCode();
+                    const propertiesWithSourceCode = properties.map((property, originalIndex) => (Object.assign(Object.assign({}, property), { originalIndex, sourceCode: sourceCode.text.substring(...property.range) })));
+                    const sortedProperties = lodash_1.default.orderBy(propertiesWithSourceCode, property => {
+                        const propertyName = property.type === 'Property' && property.key.type === 'Identifier' ? property.key.name : '';
+                        const isSpread = property.type === 'SpreadElement';
+                        const propertyOrderIndex = lodash_1.default.indexOf(propertyOrder, propertyName);
+                        const alwaysEndingPropertyIndex = lodash_1.default.indexOf(alwaysEndingProperties, propertyName);
+                        if (propertyOrderIndex !== -1) {
+                            return propertyOrderIndex;
                         }
+                        if (alwaysEndingPropertyIndex !== -1) {
+                            return alwaysEndingPropertyIndex + propertyOrder.length + 2;
+                        }
+                        if (isSpread) {
+                            return -1;
+                        }
+                        return propertyOrder.length + 1;
+                    });
+                    if (!lodash_1.default.isEqual(propertiesWithSourceCode, sortedProperties)) {
+                        context.report({
+                            node: node,
+                            messageId: 'stitchesOrder',
+                            fix: fixer => fixer.replaceText(node, `{ ${lodash_1.default.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`),
+                        });
                     }
                 }
             },

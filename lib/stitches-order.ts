@@ -271,45 +271,50 @@ export default createRule({
   defaultOptions: [],
   create: context => {
     return {
-      CallExpression(node) {
-        if (node.callee.type === 'Identifier' && node.callee.name === 'styled') {
-          const argument2 = node.arguments[1];
-          if (argument2.type === 'ObjectExpression') {
-            const properties = argument2.properties;
-            const sourceCode = context.getSourceCode();
-            const propertiesWithSourceCode = properties.map((property, originalIndex) => ({
-              ...property,
-              originalIndex,
-              sourceCode: sourceCode.text.substring(...property.range),
-            }));
-            const sortedProperties = _.orderBy(propertiesWithSourceCode, property => {
-              const propertyName =
-                property.type === 'Property' && property.key.type === 'Identifier' ? property.key.name : '';
-              const isSpread = property.type === 'SpreadElement';
-              const propertyOrderIndex = _.indexOf(propertyOrder, propertyName);
-              const alwaysEndingPropertyIndex = _.indexOf(alwaysEndingProperties, propertyName);
-              if (propertyOrderIndex !== -1) {
-                return propertyOrderIndex;
-              }
-              if (alwaysEndingPropertyIndex !== -1) {
-                return alwaysEndingPropertyIndex + propertyOrder.length + 2;
-              }
-              if (isSpread) {
-                return -1;
-              }
-              return propertyOrder.length + 1;
-            });
-            if (!_.isEqual(propertiesWithSourceCode, sortedProperties)) {
-              context.report({
-                node: argument2,
-                messageId: 'stitchesOrder',
-                fix: fixer =>
-                  fixer.replaceText(
-                    argument2,
-                    `{ ${_.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`,
-                  ),
-              });
+      ObjectExpression(node) {
+        const ancestors = context.getAncestors();
+        const hasStyledAncestor = _.some(
+          ancestors,
+          ancestor =>
+            ancestor.type === 'CallExpression' &&
+            ancestor.callee.type === 'Identifier' &&
+            ancestor.callee.name === 'styled',
+        );
+        if (hasStyledAncestor) {
+          const properties = node.properties;
+          const sourceCode = context.getSourceCode();
+          const propertiesWithSourceCode = properties.map((property, originalIndex) => ({
+            ...property,
+            originalIndex,
+            sourceCode: sourceCode.text.substring(...property.range),
+          }));
+          const sortedProperties = _.orderBy(propertiesWithSourceCode, property => {
+            const propertyName =
+              property.type === 'Property' && property.key.type === 'Identifier' ? property.key.name : '';
+            const isSpread = property.type === 'SpreadElement';
+            const propertyOrderIndex = _.indexOf(propertyOrder, propertyName);
+            const alwaysEndingPropertyIndex = _.indexOf(alwaysEndingProperties, propertyName);
+            if (propertyOrderIndex !== -1) {
+              return propertyOrderIndex;
             }
+            if (alwaysEndingPropertyIndex !== -1) {
+              return alwaysEndingPropertyIndex + propertyOrder.length + 2;
+            }
+            if (isSpread) {
+              return -1;
+            }
+            return propertyOrder.length + 1;
+          });
+          if (!_.isEqual(propertiesWithSourceCode, sortedProperties)) {
+            context.report({
+              node: node,
+              messageId: 'stitchesOrder',
+              fix: fixer =>
+                fixer.replaceText(
+                  node,
+                  `{ ${_.map(sortedProperties, sortedProperty => sortedProperty.sourceCode).join(',\n')} }`,
+                ),
+            });
           }
         }
       },
